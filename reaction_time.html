@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Time Test</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Custom non-selection to prevent highlighting text while clicking fast */
+        .no-select {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen p-4 md:p-8">
+
+    <div class="max-w-3xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-center pb-6 border-b border-slate-700 gap-4">
+            <div class="text-center md:text-left">
+                <h1 class="text-2xl font-bold flex items-center gap-2 justify-center md:justify-start">
+                    <i class="fa-solid fa-bolt text-yellow-400"></i>
+                    ReflexLab JS
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">Measure your cognitive processing speed</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="resetData()" class="px-4 py-2 text-sm bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors text-slate-300 border border-slate-700">
+                    Reset Data
+                </button>
+                <button id="btn-export" onclick="downloadCSV()" disabled class="px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 transition-all bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700">
+                    <i class="fa-solid fa-download"></i>
+                    Export CSV
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Interactive Game Area -->
+        <div id="game-area" class="w-full h-80 md:h-96 rounded-2xl cursor-pointer no-select flex flex-col items-center justify-center text-center transition-all duration-100 ease-in-out border-b-8 shadow-2xl bg-blue-600 border-blue-700 active:border-b-0 active:translate-y-2">
+            <div id="game-content" class="pointer-events-none text-white">
+                <i class="fa-regular fa-hand-pointer text-5xl mb-4"></i>
+                <h2 class="text-4xl md:text-5xl font-black tracking-tight">Reaction Time Test</h2>
+                <p class="text-lg md:text-xl mt-2 font-medium opacity-90">Click anywhere here to start</p>
+            </div>
+        </div>
+
+        <!-- Statistics Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <p class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Attempts</p>
+                <p id="stat-attempts" class="text-2xl font-bold mt-1">0</p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <p class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Average</p>
+                <p class="text-2xl font-bold mt-1 text-blue-400"><span id="stat-average">0</span> <span class="text-sm text-slate-500 font-normal">ms</span></p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <p class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Best</p>
+                <p class="text-2xl font-bold mt-1 text-emerald-400"><span id="stat-best">0</span> <span class="text-sm text-slate-500 font-normal">ms</span></p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <p class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Last</p>
+                <p class="text-2xl font-bold mt-1 text-yellow-400"><span id="stat-last">0</span> <span class="text-sm text-slate-500 font-normal">ms</span></p>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+                <h3 class="font-semibold text-slate-200">Recent Attempts</h3>
+                <span class="text-xs text-slate-500">Scroll for more</span>
+            </div>
+            <div class="max-h-64 overflow-y-auto">
+                <table class="w-full text-left text-sm text-slate-400">
+                    <thead class="bg-slate-900/50 sticky top-0 text-xs uppercase font-semibold text-slate-500">
+                        <tr>
+                            <th class="px-6 py-3">#</th>
+                            <th class="px-6 py-3">Result</th>
+                            <th class="px-6 py-3 text-right">Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body" class="divide-y divide-slate-700">
+                        <tr id="empty-row">
+                            <td colspan="3" class="px-6 py-8 text-center text-slate-500 italic">
+                                No data recorded yet. Start the test!
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="text-center text-slate-500 text-xs pb-4">
+            <p>This test measures visual motor reaction time. Average human reaction time is ~270ms.</p>
+        </div>
+    </div>
+
+    <script>
+        // --- State Variables ---
+        let gameState = 'idle'; // idle, waiting, ready, finished, early
+        let startTime = 0;
+        let timeoutId = null;
+        let attempts = [];
+
+        // --- DOM Elements ---
+        const gameArea = document.getElementById('game-area');
+        const gameContent = document.getElementById('game-content');
+        const btnExport = document.getElementById('btn-export');
+        const tbody = document.getElementById('results-body');
+        const emptyRow = document.getElementById('empty-row');
+        
+        // Stats Elements
+        const elAttempts = document.getElementById('stat-attempts');
+        const elAverage = document.getElementById('stat-average');
+        const elBest = document.getElementById('stat-best');
+        const elLast = document.getElementById('stat-last');
+
+        // --- Core Logic ---
+
+        gameArea.addEventListener('click', handleBoxClick);
+
+        function handleBoxClick() {
+            if (gameState === 'idle' || gameState === 'finished' || gameState === 'early') {
+                startTest();
+            } else if (gameState === 'waiting') {
+                // Clicked too early
+                clearTimeout(timeoutId);
+                setGameState('early');
+            } else if (gameState === 'ready') {
+                // Success
+                const endTime = performance.now();
+                const reactionTime = Math.round(endTime - startTime);
+                recordAttempt(reactionTime);
+                setGameState('finished', reactionTime);
+            }
+        }
+
+        function startTest() {
+            setGameState('waiting');
+            // Random delay between 2s and 5s
+            const delay = Math.floor(Math.random() * 3000) + 2000;
+            
+            timeoutId = setTimeout(() => {
+                startTime = performance.now();
+                setGameState('ready');
+            }, delay);
+        }
+
+        function setGameState(state, time = null) {
+            gameState = state;
+            
+            // Remove all existing color classes
+            gameArea.className = "w-full h-80 md:h-96 rounded-2xl cursor-pointer no-select flex flex-col items-center justify-center text-center transition-all duration-100 ease-in-out border-b-8 shadow-2xl active:border-b-0 active:translate-y-2 ";
+
+            // Apply new styles based on state
+            switch (state) {
+                case 'idle':
+                    gameArea.classList.add('bg-blue-600', 'border-blue-700');
+                    updateContent('<i class="fa-regular fa-hand-pointer text-5xl mb-4"></i>', 'Reaction Time Test', 'Click anywhere to start');
+                    break;
+                case 'waiting':
+                    gameArea.classList.add('bg-rose-500', 'border-rose-600');
+                    updateContent('<i class="fa-solid fa-stopwatch text-5xl mb-4 animate-pulse"></i>', 'Wait for Green...', 'Do not click yet');
+                    break;
+                case 'ready':
+                    gameArea.classList.add('bg-emerald-500', 'border-emerald-600');
+                    updateContent('<i class="fa-solid fa-bolt text-6xl mb-4 animate-bounce"></i>', 'CLICK NOW!', '');
+                    break;
+                case 'early':
+                    gameArea.classList.add('bg-amber-500', 'border-amber-600');
+                    updateContent('<i class="fa-solid fa-circle-exclamation text-5xl mb-4"></i>', 'Too Soon!', 'Click to try again');
+                    break;
+                case 'finished':
+                    gameArea.classList.add('bg-slate-200', 'border-slate-300');
+                    // Change text color for finished state to dark
+                    gameContent.className = "pointer-events-none text-slate-800";
+                    updateContent('<i class="fa-solid fa-rotate-left text-5xl mb-4"></i>', `${time} ms`, 'Click to go again');
+                    return; // Return early to avoid resetting text color below
+            }
+
+            // Default text color is white for all states except finished
+            if (state !== 'finished') {
+                gameContent.className = "pointer-events-none text-white";
+            }
+        }
+
+        function updateContent(iconHtml, title, subtitle) {
+            gameContent.innerHTML = `
+                ${iconHtml}
+                <h2 class="text-4xl md:text-5xl font-black tracking-tight">${title}</h2>
+                <p class="text-lg md:text-xl mt-2 font-medium opacity-90">${subtitle}</p>
+            `;
+        }
+
+        function recordAttempt(time) {
+            const attempt = {
+                id: Date.now(),
+                time: time,
+                date: new Date()
+            };
+            
+            attempts.unshift(attempt); // Add to beginning of array
+            updateStats();
+            renderTable();
+            checkExportButton();
+        }
+
+        // --- Statistics & Table ---
+
+        function updateStats() {
+            if (attempts.length === 0) {
+                elAttempts.innerText = '0';
+                elAverage.innerText = '0';
+                elBest.innerText = '0';
+                elLast.innerText = '0';
+                return;
+            }
+
+            const total = attempts.reduce((sum, a) => sum + a.time, 0);
+            const avg = Math.round(total / attempts.length);
+            const best = Math.min(...attempts.map(a => a.time));
+            
+            elAttempts.innerText = attempts.length;
+            elAverage.innerText = avg;
+            elBest.innerText = best;
+            elLast.innerText = attempts[0].time;
+        }
+
+        function renderTable() {
+            // Remove empty row message if it exists
+            if (emptyRow && emptyRow.parentNode) {
+                emptyRow.remove();
+            }
+
+            // Clear table to rebuild (simple approach)
+            tbody.innerHTML = '';
+
+            attempts.forEach((attempt, index) => {
+                const row = document.createElement('tr');
+                row.className = "hover:bg-slate-700/50 transition-colors";
+                
+                // Color coding for score
+                let scoreColor = 'text-rose-400';
+                if (attempt.time < 250) scoreColor = 'text-emerald-400';
+                else if (attempt.time < 350) scoreColor = 'text-blue-400';
+
+                const timeString = attempt.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                row.innerHTML = `
+                    <td class="px-6 py-3 font-medium text-slate-300">${attempts.length - index}</td>
+                    <td class="px-6 py-3 font-bold ${scoreColor}">${attempt.time} ms</td>
+                    <td class="px-6 py-3 text-right tabular-nums text-slate-500">${timeString}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function resetData() {
+            attempts = [];
+            clearTimeout(timeoutId);
+            setGameState('idle');
+            updateStats();
+            
+            // Clear table and show empty message
+            tbody.innerHTML = '';
+            tbody.appendChild(emptyRow); // Re-attach the original empty row element
+            
+            checkExportButton();
+        }
+
+        // --- Export Functionality ---
+
+        function checkExportButton() {
+            if (attempts.length > 0) {
+                btnExport.disabled = false;
+                btnExport.classList.remove('bg-slate-800', 'text-slate-500', 'cursor-not-allowed', 'border-slate-700');
+                btnExport.classList.add('bg-blue-600', 'hover:bg-blue-500', 'text-white', 'shadow-lg');
+            } else {
+                btnExport.disabled = true;
+                btnExport.classList.add('bg-slate-800', 'text-slate-500', 'cursor-not-allowed', 'border-slate-700');
+                btnExport.classList.remove('bg-blue-600', 'hover:bg-blue-500', 'text-white', 'shadow-lg');
+            }
+        }
+
+        function downloadCSV() {
+            if (attempts.length === 0) return;
+
+            const headers = "Attempt ID,Reaction Time (ms),Timestamp";
+            const rows = attempts.map((attempt, index) => {
+                return `${attempts.length - index},${attempt.time},${attempt.date.toISOString()}`;
+            });
+
+            const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
+            const encodedUri = encodeURI(csvContent);
+            
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `reaction_time_data_${new Date().getTime()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
